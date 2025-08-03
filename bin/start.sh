@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Initialize database
-python /app/startup.py
+python /app/bin/init-db.py
 
 # Start cron in background
 service cron start

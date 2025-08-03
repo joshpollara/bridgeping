@@ -8,9 +8,9 @@ import re
 import json
 from datetime import datetime, timezone
 
-from database import init_db, get_db, WatchedBridge
+from webapp.database import init_db, get_db, WatchedBridge
 from sqlalchemy import text
-from auth import (
+from webapp.auth import (
     create_user, 
     authenticate_user, 
     create_access_token,
@@ -18,7 +18,7 @@ from auth import (
     get_current_user,
     get_current_user_required
 )
-from ical_generator import generate_ical_feed
+from webapp.ical_generator import generate_ical_feed
 import secrets
 
 app = FastAPI()
@@ -27,10 +27,10 @@ app = FastAPI()
 init_db()
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="webapp/static"), name="static")
 
 # Templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="webapp/templates")
 
 # Email validation regex
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
@@ -600,4 +600,4 @@ async def calendar_feed(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("webapp.main:app", host="0.0.0.0", port=8000, reload=True)

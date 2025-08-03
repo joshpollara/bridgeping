@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 # Add app directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from webapp.database import init_db, DATABASE_PATH
 

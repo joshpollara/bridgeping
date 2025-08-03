@@ -597,6 +597,13 @@ async def calendar_feed(
         }
     )
 
+@app.get("/faq", response_class=HTMLResponse)
+async def faq(request: Request, current_user = Depends(get_current_user)):
+    return templates.TemplateResponse("faq.html", {
+        "request": request,
+        "user": current_user
+    })
+
 
 if __name__ == "__main__":
     import uvicorn

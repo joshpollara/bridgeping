@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Bridge Ping - Never Get Stuck at Dutch Bridges Again{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="row align-items-center py-5">
+    <div class="col-lg-6">
+        <h1 class="display-4 fw-bold mb-3">Never Get Stuck at a Bridge Again</h1>
+        <p class="lead mb-4">
+            Track bridge openings across the Netherlands. Get real-time notifications and sync with your calendar to plan your routes perfectly.
+        </p>
+        {% if user %}
+            <div class="d-grid gap-2 d-md-block">
+                <a class="btn btn-primary btn-lg" href="/dashboard">Go to Dashboard</a>
+                <a class="btn btn-outline-primary btn-lg" href="/watchlist">My Watchlist</a>
+            </div>
+        {% else %}
+            <div class="d-grid gap-2 d-md-block">
+                <a class="btn btn-primary btn-lg" href="/register">Get Started Free</a>
+                <a class="btn btn-outline-primary btn-lg" href="/login">Login</a>
+            </div>
+        {% endif %}
+    </div>
+    <div class="col-lg-6">
+        <div class="text-center">
+            <div class="display-1">🌉</div>
+            <p class="text-muted">Real-time bridge opening data from NDW (National Data Warehouse)</p>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Bar -->
+<div class="row text-center py-4 bg-light rounded my-5">
+    <div class="col-md-4">
+        <h3 class="fw-bold text-primary">30,000+</h3>
+        <p class="mb-0">Bridges Tracked</p>
+    </div>
+    <div class="col-md-4">
+        <h3 class="fw-bold text-primary">1,200+</h3>
+        <p class="mb-0">Active Bridge Openings</p>
+    </div>
+    <div class="col-md-4">
+        <h3 class="fw-bold text-primary">24/7</h3>
+        <p class="mb-0">Real-time Updates</p>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="row mt-5 mb-5">
+    <div class="col-12 text-center mb-5">
+        <h2 class="display-5 fw-bold">Everything You Need to Avoid Bridge Delays</h2>
+        <p class="lead text-muted">Stay informed about bridge openings that affect your daily commute or trips</p>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="display-4 text-primary mb-3">📍</div>
+                <h4>Personal Watchlist</h4>
+                <p class="text-muted">Track specific bridges on your regular routes. Get notifications only for the bridges that matter to you.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="display-4 text-primary mb-3">📅</div>
+                <h4>Calendar Integration</h4>
+                <p class="text-muted">Subscribe to your personal calendar feed. See bridge openings in Google Calendar, Apple Calendar, or Outlook.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="display-4 text-primary mb-3">⏰</div>
+                <h4>Smart Notifications</h4>
+                <p class="text-muted">Get 15-minute reminders before bridge openings. Plan alternative routes and never be late again.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works Section -->
+<div class="row py-5 bg-light rounded">
+    <div class="col-12 text-center mb-5">
+        <h2 class="display-5 fw-bold">How It Works</h2>
+    </div>
+    
+    <div class="col-md-3 text-center mb-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+            <h3 class="mb-0">1</h3>
+        </div>
+        <h5 class="mt-3">Sign Up</h5>
+        <p class="text-muted">Create your free account in seconds</p>
+    </div>
+    
+    <div class="col-md-3 text-center mb-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+            <h3 class="mb-0">2</h3>
+        </div>
+        <h5 class="mt-3">Add Bridges</h5>
+        <p class="text-muted">Search and add bridges to your watchlist</p>
+    </div>
+    
+    <div class="col-md-3 text-center mb-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+            <h3 class="mb-0">3</h3>
+        </div>
+        <h5 class="mt-3">Subscribe</h5>
+        <p class="text-muted">Add your personal feed to any calendar app</p>
+    </div>
+    
+    <div class="col-md-3 text-center mb-4">
+        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+            <h3 class="mb-0">4</h3>
+        </div>
+        <h5 class="mt-3">Stay Informed</h5>
+        <p class="text-muted">Get automatic updates about bridge openings</p>
+    </div>
+</div>
+
+<!-- Use Cases Section -->
+<div class="row mt-5 mb-5">
+    <div class="col-12 text-center mb-5">
+        <h2 class="display-5 fw-bold">Perfect For</h2>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <span class="display-6">🚗</span>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <h5>Daily Commuters</h5>
+                <p class="text-muted">Avoid unexpected delays on your way to work. Know about bridge openings before you leave.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <span class="display-6">🚚</span>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <h5>Delivery Drivers</h5>
+                <p class="text-muted">Plan efficient routes and meet delivery deadlines by avoiding bridge opening times.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <span class="display-6">🚴</span>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <h5>Cyclists</h5>
+                <p class="text-muted">Perfect for bike commuters who need to cross bridges regularly in Dutch cities.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <span class="display-6">📱</span>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <h5>Anyone On The Go</h5>
+                <p class="text-muted">Stay informed about infrastructure that affects your travel time in the Netherlands.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CTA Section -->
+<div class="row py-5 bg-primary text-white rounded mb-5">
+    <div class="col-12 text-center">
+        <h2 class="display-5 fw-bold mb-3">Start Tracking Bridge Openings Today</h2>
+        <p class="lead mb-4">Join thousands of Dutch commuters who never get stuck at bridges anymore</p>
+        {% if not user %}
+            <a class="btn btn-light btn-lg" href="/register">Create Free Account</a>
+        {% else %}
+            <a class="btn btn-light btn-lg" href="/watchlist">View My Watchlist</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Footer Info -->
+<div class="row mt-5 text-center text-muted">
+    <div class="col-12">
+        <p class="small">
+            Bridge opening data provided by NDW (Nationale Databank Wegverkeersgegevens)<br>
+            Enhanced with OpenStreetMap data for better bridge identification
+        </p>
+    </div>
+</div>
+{% endblock %}

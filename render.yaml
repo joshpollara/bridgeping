@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: bridgeping
+    runtime: docker
+    region: frankfurt  # Closest to Netherlands
+    plan: free
+    
+    # Persistent disk for SQLite database
+    disk:
+      name: bridgeping-data
+      mountPath: /app/data
+      sizeGB: 1
+    
+    # Environment variables
+    envVars:
+      - key: DATABASE_PATH
+        value: /app/data/bridgeping.db
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: TZ
+        value: Europe/Amsterdam
+    
+    # Health check
+    healthCheckPath: /
+    
+    # Build configuration
+    buildCommand: docker build -t bridgeping .

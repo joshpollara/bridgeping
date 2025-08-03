@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Event Timeline - Bridge Ping{% endblock %}
+
+{% block content %}
+<style>
+    .timeline-event {
+        border-left: 4px solid #007bff;
+        padding-left: 20px;
+        margin-bottom: 20px;
+        position: relative;
+    }
+    .timeline-event::before {
+        content: '';
+        position: absolute;
+        left: -8px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #007bff;
+        border: 2px solid white;
+    }
+    .timeline-event.past {
+        border-left-color: #6c757d;
+        opacity: 0.7;
+    }
+    .timeline-event.past::before {
+        background: #6c757d;
+    }
+    .timeline-event.current {
+        border-left-color: #28a745;
+        background-color: #f0f8f0;
+    }
+    .timeline-event.current::before {
+        background: #28a745;
+        box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.2);
+    }
+    .event-time {
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+    .timeline-section {
+        margin-bottom: 40px;
+    }
+</style>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Bridge Opening Timeline</h4>
+                <span class="badge bg-light text-dark">Watching {{ watched_count }} bridges</span>
+            </div>
+            <div class="card-body">
+                {% if watched_count == 0 %}
+                <div class="alert alert-info">
+                    <h5>No bridges in your watchlist</h5>
+                    <p>Add bridges to your watchlist to see their opening events here.</p>
+                    <a href="/watchlist" class="btn btn-primary">Go to Watchlist</a>
+                </div>
+                {% else %}
+                
+                <!-- Current Events -->
+                {% if current_events %}
+                <div class="timeline-section">
+                    <h5 class="text-success mb-3">
+                        <i class="bi bi-circle-fill"></i> Currently Open
+                    </h5>
+                    {% for event in current_events %}
+                    <div class="timeline-event current">
+                        <h6 class="mb-1">{{ event.bridge_name }}</h6>
+                        <div class="event-time">
+                            <strong>Now</strong> - Closes at {{ event.end_time.strftime('%H:%M') }}
+                            {% if event.bridge_city %}({{ event.bridge_city }}){% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <!-- Upcoming Events -->
+                <div class="timeline-section">
+                    <h5 class="mb-3">📅 Upcoming Bridge Openings</h5>
+                    {% if upcoming_events %}
+                        {% for event in upcoming_events %}
+                        <div class="timeline-event">
+                            <h6 class="mb-1">{{ event.bridge_name }}</h6>
+                            <div class="event-time">
+                                <strong>{{ event.start_time.strftime('%a, %b %d at %H:%M') }}</strong> - 
+                                {{ event.end_time.strftime('%H:%M') }}
+                                ({{ ((event.end_time - event.start_time).seconds // 60) }} minutes)
+                                {% if event.bridge_city %}• {{ event.bridge_city }}{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <p class="text-muted">No upcoming openings scheduled for your watched bridges.</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Past Events -->
+                <div class="timeline-section">
+                    <h5 class="mb-3 text-muted">📋 Recent Past Openings</h5>
+                    {% if past_events %}
+                        <div class="text-muted">
+                            {% for event in past_events[:20] %}
+                            <div class="timeline-event past">
+                                <h6 class="mb-1">{{ event.bridge_name }}</h6>
+                                <div class="event-time">
+                                    {{ event.start_time.strftime('%a, %b %d at %H:%M') }} - 
+                                    {{ event.end_time.strftime('%H:%M') }}
+                                    {% if event.bridge_city %}• {{ event.bridge_city }}{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if past_events|length > 20 %}
+                            <p class="text-center mt-3">
+                                <small>Showing 20 most recent events out of {{ past_events|length }} total</small>
+                            </p>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                    <p class="text-muted">No past events recorded yet.</p>
+                    {% endif %}
+                </div>
+                
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Info Card -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5>About Bridge Opening Times</h5>
+                <p>This timeline shows scheduled bridge openings for the bridges in your watchlist. 
+                   Times are based on the official schedule from the NDW (National Data Warehouse for Traffic Information).</p>
+                <p class="mb-0"><small class="text-muted">
+                    Note: Only bridges marked with ⏰ in your watchlist have scheduled opening data available.
+                </small></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

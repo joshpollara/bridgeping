@@ -1,0 +1,15 @@
+.git
+.gitignore
+*.pyc
+__pycache__
+.DS_Store
+*.db
+*.log
+.env
+venv/
+env/
+.vscode/
+.idea/
+README.md
+brugopeningen.xml.gz
+*.xml

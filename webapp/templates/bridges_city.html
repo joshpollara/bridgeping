@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Bridges in {{ city }} - BridgePing{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/bridges">All Cities</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ city }}</li>
+        </ol>
+    </nav>
+    
+    <h1 class="mb-4">Bridges in {{ city }}</h1>
+    
+    <p class="lead">{{ bridges|length }} bridge{{ 's' if bridges|length != 1 else '' }} found. Click on any bridge to subscribe to its opening calendar.</p>
+    
+    <div class="row">
+        {% for bridge in bridges %}
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <a href="/bridge/{{ bridge.id }}" class="text-decoration-none">{{ bridge.name }}</a>
+                    </h5>
+                    
+                    <div class="mb-3">
+                        {% if bridge.street_name %}
+                        <small class="text-muted d-block">Street: {{ bridge.street_name }}</small>
+                        {% endif %}
+                        {% if bridge.water_name %}
+                        <small class="text-muted d-block">Water: {{ bridge.water_name }}</small>
+                        {% endif %}
+                        {% if bridge.neighborhood %}
+                        <small class="text-muted d-block">Area: {{ bridge.neighborhood }}</small>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="/calendar/bridge/{{ bridge.id }}.ics" class="btn btn-primary btn-sm">
+                            <i class="bi bi-calendar-plus"></i> Subscribe to Calendar
+                        </a>
+                        
+                        {% if bridge.latitude and bridge.longitude %}
+                        <a href="https://www.google.com/maps?q={{ bridge.latitude }},{{ bridge.longitude }}" 
+                           target="_blank" 
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-geo-alt"></i> View Map
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if not bridges %}
+    <div class="alert alert-info">
+        No bridges found in {{ city }}.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}{{ bridge.name }} - BridgePing{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/bridges">All Cities</a></li>
+            <li class="breadcrumb-item"><a href="/bridges/{{ bridge.city|urlencode }}">{{ bridge.city }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ bridge.name }}</li>
+        </ol>
+    </nav>
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <h1 class="mb-4">{{ bridge.name }}</h1>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Bridge Information</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>City:</strong> {{ bridge.city }}</p>
+                            {% if bridge.street_name %}
+                            <p class="mb-2"><strong>Street:</strong> {{ bridge.street_name }}</p>
+                            {% endif %}
+                            {% if bridge.water_name %}
+                            <p class="mb-2"><strong>Water:</strong> {{ bridge.water_name }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            {% if bridge.neighborhood %}
+                            <p class="mb-2"><strong>Neighborhood:</strong> {{ bridge.neighborhood }}</p>
+                            {% endif %}
+                            <p class="mb-2"><strong>Coordinates:</strong> {{ "%.4f"|format(bridge.latitude) }}, {{ "%.4f"|format(bridge.longitude) }}</p>
+                            <p class="mb-2"><strong>Bridge ID:</strong> #{{ bridge.id }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Opening Schedule -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Opening Schedule</h5>
+                </div>
+                <div class="card-body">
+                    {% if openings %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Duration</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for opening in openings[:20] %}
+                                    <tr class="{% if opening.start_time > now() %}table-info{% endif %}">
+                                        <td>{{ opening.start_time.strftime('%a, %b %d') }}</td>
+                                        <td>{{ opening.start_time.strftime('%H:%M') }} - {{ opening.end_time.strftime('%H:%M') }}</td>
+                                        <td>{{ opening.duration_minutes }} min</td>
+                                        <td>
+                                            {% if opening.status == 'active' %}
+                                                <span class="badge bg-success">{{ opening.status }}</span>
+                                            {% elif opening.status == 'planned' %}
+                                                <span class="badge bg-info">{{ opening.status }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ opening.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if openings|length > 20 %}
+                        <p class="text-muted text-center">Showing 20 of {{ openings|length }} openings</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted">No opening data available for this bridge.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Actions</h5>
+                    
+                    <a href="/calendar/bridge/{{ bridge.id }}.ics" class="btn btn-primary w-100 mb-3">
+                        <i class="bi bi-calendar-plus"></i> Subscribe to Calendar
+                    </a>
+                    
+                    {% if user %}
+                        {% if is_watched %}
+                        <form method="POST" action="/watchlist/remove/{{ bridge.id }}">
+                            <button type="submit" class="btn btn-outline-danger w-100 mb-3">
+                                <i class="bi bi-star-fill"></i> Remove from Watchlist
+                            </button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="/watchlist/add">
+                            <input type="hidden" name="bridge_id" value="{{ bridge.id }}">
+                            <button type="submit" class="btn btn-outline-primary w-100 mb-3">
+                                <i class="bi bi-star"></i> Add to Watchlist
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <a href="https://www.google.com/maps?q={{ bridge.latitude }},{{ bridge.longitude }}" 
+                       target="_blank" 
+                       class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-geo-alt"></i> View on Google Maps
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Statistics -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Statistics</h5>
+                    <p class="mb-2"><strong>Past 7 days:</strong> {{ stats.total_past_week }} openings</p>
+                    <p class="mb-2"><strong>Next 7 days:</strong> {{ stats.upcoming_week }} scheduled</p>
+                    {% if stats.avg_duration > 0 %}
+                    <p class="mb-0"><strong>Average duration:</strong> {{ "%.0f"|format(stats.avg_duration) }} minutes</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Map -->
+            <div class="card">
+                <div class="card-body p-0">
+                    <div id="bridge-map" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// Initialize map
+var map = L.map('bridge-map').setView([{{ bridge.latitude }}, {{ bridge.longitude }}], 15);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// Add bridge marker
+var marker = L.marker([{{ bridge.latitude }}, {{ bridge.longitude }}])
+    .addTo(map)
+    .bindPopup('<strong>{{ bridge.name|e }}</strong>')
+    .openPopup();
+</script>
+{% endblock %}

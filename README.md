@@ -4,7 +4,7 @@ Real-time bridge opening notifications for the Netherlands. Track when bridges o
 
 ## Features
 
-- 🌉 **Real-time Bridge Monitoring** - Live data from the Dutch National Data Warehouse (NDW)
+- 🌉 **Real-time Bridge Monitoring** - Live data from the NDW (Nationale Databank Wegverkeersgegevens)
 - 👤 **Personal Watchlists** - Track bridges that matter to you
 - 📅 **Calendar Integration** - Export bridge openings to your calendar (iCal format)
 - 📍 **Location-based Search** - Find bridges near you

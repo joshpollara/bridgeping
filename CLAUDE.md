@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BridgePing is a web application that tracks and monitors bridge openings in the Netherlands. It collects real-time data from the Dutch National Data Warehouse (NDW), allows users to create watchlists, and provides calendar feeds for bridge opening schedules.
+BridgePing is a web application that tracks and monitors bridge openings in the Netherlands. It collects real-time data from the NDW (Nationale Databank Wegverkeersgegevens), allows users to create watchlists, and provides calendar feeds for bridge opening schedules.
 
 ## Development Commands
 

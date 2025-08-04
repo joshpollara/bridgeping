@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Browse Bridges - BridgePing{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Browse Bridges by City</h1>
+    
+    <p class="lead">Select a city to view all bridges and subscribe to their opening calendars.</p>
+    
+    <div class="alert alert-info mb-4">
+        <h5 class="alert-heading"><i class="bi bi-info-circle"></i> Public Calendar Feeds</h5>
+        <p class="mb-0">You don't need an account to subscribe to bridge calendars! Browse to any city, find the bridges you're interested in, and add their calendar feeds directly to your calendar app.</p>
+    </div>
+    
+    <!-- Search Box -->
+    <div class="row mb-4">
+        <div class="col-md-6 mx-auto">
+            <div class="input-group">
+                <input type="text" class="form-control" id="city-search" placeholder="Search for a city..." aria-label="Search cities">
+                <button class="btn btn-outline-secondary" type="button" id="clear-search">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            </div>
+            <small class="text-muted">Start typing to filter cities</small>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-3 col-md-4 mb-3">
+            <div class="sticky-top" style="top: 20px;">
+                <h5>Jump to letter</h5>
+                <div class="list-group">
+                    {% for letter in cities_by_letter.keys()|sort %}
+                    <a href="#letter-{{ letter }}" class="list-group-item list-group-item-action py-1">{{ letter }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-9 col-md-8">
+            {% for letter, cities in cities_by_letter.items()|sort %}
+            <div id="letter-{{ letter }}" class="mb-4">
+                <h3 class="border-bottom pb-2">{{ letter }}</h3>
+                <div class="row">
+                    {% for city in cities %}
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <a href="/bridges/{{ city.name|urlencode }}" class="text-decoration-none">
+                            <div class="card h-100 hover-shadow">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-1">{{ city.name }}</h5>
+                                    <p class="card-text text-muted">
+                                        {{ city.count }} bridge{{ 's' if city.count != 1 else '' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow {
+    transition: box-shadow 0.3s ease-in-out;
+}
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15)!important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var searchInput = document.getElementById('city-search');
+    var clearButton = document.getElementById('clear-search');
+    var cityCards = document.querySelectorAll('.col-lg-4.col-md-6.mb-3');
+    var letterSections = document.querySelectorAll('[id^="letter-"]');
+    
+    function filterCities() {
+        var searchTerm = searchInput.value.toLowerCase().trim();
+        var visibleLetters = new Set();
+        
+        // Show/hide city cards
+        cityCards.forEach(function(card) {
+            var cityName = card.querySelector('.card-title').textContent.toLowerCase();
+            if (searchTerm === '' || cityName.includes(searchTerm)) {
+                card.style.display = '';
+                // Track which letters have visible cities
+                var letter = cityName.charAt(0).toUpperCase();
+                visibleLetters.add(letter);
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        // Show/hide letter sections
+        letterSections.forEach(function(section) {
+            var letter = section.id.replace('letter-', '');
+            if (searchTerm === '' || visibleLetters.has(letter)) {
+                section.style.display = '';
+            } else {
+                section.style.display = 'none';
+            }
+        });
+        
+        // Show/hide clear button
+        clearButton.style.display = searchTerm ? 'block' : 'none';
+    }
+    
+    // Search on input
+    searchInput.addEventListener('input', filterCities);
+    
+    // Clear search
+    clearButton.addEventListener('click', function() {
+        searchInput.value = '';
+        filterCities();
+        searchInput.focus();
+    });
+    
+    // Initially hide clear button
+    clearButton.style.display = 'none';
+});
+</script>
+{% endblock %}

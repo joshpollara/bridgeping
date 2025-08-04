@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Bridge Map - BridgePing{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="row g-0">
+        <div class="col">
+            <div id="map" style="height: calc(100vh - 56px);"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Map Legend -->
+<div class="position-absolute bottom-0 end-0 m-3 bg-white rounded shadow p-3" style="z-index: 1000;">
+    <h6 class="mb-2">Legend</h6>
+    <div class="d-flex align-items-center mb-1">
+        <span class="badge bg-primary me-2" style="width: 20px; height: 20px; border-radius: 50%;"></span>
+        <small>City clusters</small>
+    </div>
+    <div class="d-flex align-items-center mb-1">
+        <span class="badge bg-success me-2" style="width: 20px; height: 20px;"></span>
+        <small>Bridge with openings</small>
+    </div>
+    <div class="d-flex align-items-center">
+        <span class="badge bg-secondary me-2" style="width: 20px; height: 20px;"></span>
+        <small>Bridge (no data)</small>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script>
+// Initialize map centered on Netherlands
+var map = L.map('map').setView([52.1326, 5.2913], 8);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18
+}).addTo(map);
+
+// Layer groups
+var cityLayer = L.layerGroup();
+var bridgeLayer = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false
+});
+
+// City markers
+var cityMarkers = {};
+
+// Load initial city data
+fetch('/api/bridges/map')
+    .then(response => response.json())
+    .then(data => {
+        if (data.type === 'cities') {
+            data.data.forEach(city => {
+                var marker = L.circleMarker([city.latitude, city.longitude], {
+                    radius: Math.min(20, 5 + Math.sqrt(city.count)),
+                    fillColor: '#0d6efd',
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).bindPopup(`
+                    <strong>${city.name}</strong><br>
+                    ${city.count} bridges<br>
+                    <a href="/bridges/${encodeURIComponent(city.name)}">View all →</a>
+                `);
+                
+                cityMarkers[city.name] = marker;
+                cityLayer.addLayer(marker);
+            });
+            cityLayer.addTo(map);
+        }
+    });
+
+// Load bridges when zoomed in
+function loadBridges() {
+    var bounds = map.getBounds();
+    var boundsStr = [
+        bounds.getSouth(),
+        bounds.getWest(),
+        bounds.getNorth(),
+        bounds.getEast()
+    ].join(',');
+    
+    fetch(`/api/bridges/map?bounds=${boundsStr}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.type === 'bridges') {
+                bridgeLayer.clearLayers();
+                
+                data.data.forEach(bridge => {
+                    var icon = L.divIcon({
+                        html: `<div class="bridge-marker ${bridge.has_openings ? 'has-openings' : 'no-openings'}"></div>`,
+                        iconSize: [20, 20],
+                        className: ''
+                    });
+                    
+                    var marker = L.marker([bridge.latitude, bridge.longitude], { icon: icon })
+                        .bindPopup(`
+                            <strong>${bridge.name}</strong><br>
+                            ${bridge.city}<br>
+                            <a href="/bridge/${bridge.id}">View details →</a>
+                        `);
+                    
+                    bridgeLayer.addLayer(marker);
+                });
+                
+                if (!map.hasLayer(bridgeLayer)) {
+                    map.addLayer(bridgeLayer);
+                }
+            }
+        });
+}
+
+// Handle zoom changes
+map.on('zoomend', function() {
+    var zoom = map.getZoom();
+    
+    if (zoom >= 11) {
+        // Hide city markers, show bridges
+        if (map.hasLayer(cityLayer)) {
+            map.removeLayer(cityLayer);
+        }
+        loadBridges();
+    } else {
+        // Show city markers, hide bridges
+        if (!map.hasLayer(cityLayer)) {
+            map.addLayer(cityLayer);
+        }
+        if (map.hasLayer(bridgeLayer)) {
+            map.removeLayer(bridgeLayer);
+        }
+    }
+});
+
+// Also load bridges when map moves (if zoomed in enough)
+map.on('moveend', function() {
+    if (map.getZoom() >= 11) {
+        loadBridges();
+    }
+});
+
+// Add fullscreen button
+L.control.custom = function() {
+    var control = L.Control.extend({
+        options: {
+            position: 'topleft'
+        },
+        onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            var button = L.DomUtil.create('a', '', container);
+            button.href = '#';
+            button.title = 'View bridge list';
+            button.innerHTML = '📋';
+            button.style.fontSize = '18px';
+            button.style.lineHeight = '30px';
+            button.style.width = '30px';
+            button.style.height = '30px';
+            button.style.textAlign = 'center';
+            
+            L.DomEvent.on(button, 'click', function(e) {
+                L.DomEvent.preventDefault(e);
+                window.location.href = '/bridges';
+            });
+            
+            return container;
+        }
+    });
+    return new control();
+};
+L.control.custom().addTo(map);
+</script>
+
+<style>
+.bridge-marker {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.bridge-marker.has-openings {
+    background-color: #198754;
+}
+
+.bridge-marker.no-openings {
+    background-color: #6c757d;
+}
+
+.leaflet-popup-content {
+    margin: 10px;
+}
+</style>
+{% endblock %}

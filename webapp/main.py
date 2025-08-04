@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Response, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -596,6 +596,328 @@ async def calendar_feed(
             "Cache-Control": "no-cache, must-revalidate"
         }
     )
+
+@app.get("/bridges", response_class=HTMLResponse)
+async def bridges_list(request: Request, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get all cities with bridge counts
+    query = """
+        SELECT city, COUNT(*) as count 
+        FROM bridges 
+        WHERE city IS NOT NULL 
+        GROUP BY city 
+        ORDER BY city
+    """
+    result = db.execute(text(query))
+    cities = result.fetchall()
+    
+    # Group cities by first letter for easier navigation
+    cities_by_letter = {}
+    for city, count in cities:
+        first_letter = city[0].upper()
+        if first_letter not in cities_by_letter:
+            cities_by_letter[first_letter] = []
+        cities_by_letter[first_letter].append({'name': city, 'count': count})
+    
+    return templates.TemplateResponse("bridges.html", {
+        "request": request,
+        "user": current_user,
+        "cities_by_letter": cities_by_letter
+    })
+
+@app.get("/bridges/{city}", response_class=HTMLResponse)
+async def bridges_by_city(city: str, request: Request, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get all bridges in the specified city
+    query = """
+        SELECT id, name, display_name, street_name, water_name, neighborhood, latitude, longitude
+        FROM bridges 
+        WHERE city = :city 
+        ORDER BY name, street_name
+    """
+    result = db.execute(text(query), {"city": city})
+    bridges = result.fetchall()
+    
+    # Process bridges to create display names
+    bridge_list = []
+    for bridge in bridges:
+        display_name = bridge.name or bridge.display_name or (f"{bridge.street_name} Bridge" if bridge.street_name else "Unknown Bridge")
+        bridge_list.append({
+            'id': bridge.id,
+            'name': display_name,
+            'street_name': bridge.street_name,
+            'water_name': bridge.water_name,
+            'neighborhood': bridge.neighborhood,
+            'latitude': bridge.latitude,
+            'longitude': bridge.longitude
+        })
+    
+    return templates.TemplateResponse("bridges_city.html", {
+        "request": request,
+        "user": current_user,
+        "city": city,
+        "bridges": bridge_list
+    })
+
+@app.get("/calendar/bridge/{bridge_id}.ics")
+async def bridge_calendar_feed(
+    bridge_id: int,
+    db: Session = Depends(get_db)
+):
+    # Get bridge info
+    result = db.execute(text("""
+        SELECT id, name, display_name, street_name, water_name, city, latitude, longitude
+        FROM bridges 
+        WHERE id = :bridge_id
+    """), {"bridge_id": bridge_id})
+    bridge = result.fetchone()
+    
+    if not bridge:
+        raise HTTPException(status_code=404, detail="Bridge not found")
+    
+    bridge_name = bridge.name or bridge.display_name or (f"{bridge.street_name} Bridge" if bridge.street_name else f"Bridge in {bridge.city}")
+    
+    # Get bridge opening locations
+    result = db.execute(text("""
+        SELECT opening_location_key
+        FROM bridge_opening_links
+        WHERE bridge_id = :bridge_id
+    """), {"bridge_id": bridge_id})
+    
+    location_keys = []
+    for row in result:
+        lat, lon = row.opening_location_key.split(',')
+        location_key = f"{float(lat):.4f},{float(lon):.4f}"
+        location_keys.append(location_key)
+    
+    events = []
+    if location_keys:
+        # Get all opening events for this bridge
+        placeholders = ','.join([f':loc_{i}' for i in range(len(location_keys))])
+        query = f"""
+            SELECT latitude, longitude, start_time, end_time, status,
+                   ROUND(latitude, 4) || ',' || ROUND(longitude, 4) as location_key
+            FROM bridge_openings
+            WHERE ROUND(latitude, 4) || ',' || ROUND(longitude, 4) IN ({placeholders})
+            AND start_time >= datetime('now', '-7 days')
+            ORDER BY start_time
+        """
+        params = {f'loc_{i}': loc for i, loc in enumerate(location_keys)}
+        result = db.execute(text(query), params)
+        
+        for row in result:
+            # Parse datetime strings
+            if isinstance(row.start_time, str):
+                if row.start_time.endswith('Z'):
+                    start_time = datetime.fromisoformat(row.start_time.replace('Z', '+00:00'))
+                elif '+' in row.start_time or row.start_time.endswith('00:00'):
+                    start_time = datetime.fromisoformat(row.start_time)
+                else:
+                    start_time = datetime.fromisoformat(row.start_time).replace(tzinfo=timezone.utc)
+            else:
+                start_time = row.start_time
+            
+            if isinstance(row.end_time, str):
+                if row.end_time.endswith('Z'):
+                    end_time = datetime.fromisoformat(row.end_time.replace('Z', '+00:00'))
+                elif '+' in row.end_time or row.end_time.endswith('00:00'):
+                    end_time = datetime.fromisoformat(row.end_time)
+                else:
+                    end_time = datetime.fromisoformat(row.end_time).replace(tzinfo=timezone.utc)
+            else:
+                end_time = row.end_time
+            
+            events.append({
+                'bridge_name': bridge_name,
+                'bridge_city': bridge.city,
+                'latitude': row.latitude,
+                'longitude': row.longitude,
+                'location_key': row.location_key,
+                'start_time': start_time,
+                'end_time': end_time,
+                'status': row.status
+            })
+    
+    # Generate iCal feed for this specific bridge
+    ical_content = generate_ical_feed(f"{bridge_name} - {bridge.city}", events)
+    
+    return Response(
+        content=ical_content,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f"attachment; filename={bridge_id}-bridge-openings.ics",
+            "Cache-Control": "no-cache, must-revalidate"
+        }
+    )
+
+@app.get("/bridge/{bridge_id}", response_class=HTMLResponse)
+async def bridge_detail(bridge_id: int, request: Request, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get bridge info
+    result = db.execute(text("""
+        SELECT id, name, display_name, street_name, water_name, city, 
+               neighborhood, latitude, longitude
+        FROM bridges 
+        WHERE id = :bridge_id
+    """), {"bridge_id": bridge_id})
+    bridge = result.fetchone()
+    
+    if not bridge:
+        raise HTTPException(status_code=404, detail="Bridge not found")
+    
+    bridge_name = bridge.name or bridge.display_name or (f"{bridge.street_name} Bridge" if bridge.street_name else f"Bridge in {bridge.city}")
+    
+    # Get recent and upcoming openings
+    result = db.execute(text("""
+        SELECT bo.start_time, bo.end_time, bo.status, bo.latitude, bo.longitude
+        FROM bridge_openings bo
+        JOIN bridge_opening_links bol ON 
+            ROUND(bo.latitude, 4) || ',' || ROUND(bo.longitude, 4) = bol.opening_location_key
+        WHERE bol.bridge_id = :bridge_id
+        AND bo.start_time >= datetime('now', '-7 days')
+        ORDER BY bo.start_time
+        LIMIT 100
+    """), {"bridge_id": bridge_id})
+    
+    openings = []
+    for row in result:
+        # Parse datetime strings
+        if isinstance(row.start_time, str):
+            if row.start_time.endswith('Z'):
+                start_time = datetime.fromisoformat(row.start_time.replace('Z', '+00:00'))
+            elif '+' in row.start_time or row.start_time.endswith('00:00'):
+                start_time = datetime.fromisoformat(row.start_time)
+            else:
+                start_time = datetime.fromisoformat(row.start_time).replace(tzinfo=timezone.utc)
+        else:
+            start_time = row.start_time
+            
+        if isinstance(row.end_time, str):
+            if row.end_time.endswith('Z'):
+                end_time = datetime.fromisoformat(row.end_time.replace('Z', '+00:00'))
+            elif '+' in row.end_time or row.end_time.endswith('00:00'):
+                end_time = datetime.fromisoformat(row.end_time)
+            else:
+                end_time = datetime.fromisoformat(row.end_time).replace(tzinfo=timezone.utc)
+        else:
+            end_time = row.end_time
+        
+        openings.append({
+            'start_time': start_time,
+            'end_time': end_time,
+            'status': row.status,
+            'duration_minutes': int((end_time - start_time).total_seconds() / 60)
+        })
+    
+    # Calculate statistics
+    past_openings = [o for o in openings if o['start_time'] < datetime.now(timezone.utc)]
+    future_openings = [o for o in openings if o['start_time'] >= datetime.now(timezone.utc)]
+    
+    stats = {
+        'total_past_week': len(past_openings),
+        'upcoming_week': len(future_openings),
+        'avg_duration': sum(o['duration_minutes'] for o in past_openings) / len(past_openings) if past_openings else 0
+    }
+    
+    # Check if user has this bridge in watchlist
+    is_watched = False
+    if current_user:
+        watched = db.query(WatchedBridge).filter(
+            WatchedBridge.user_id == current_user.id,
+            WatchedBridge.bridge_id == bridge_id
+        ).first()
+        is_watched = watched is not None
+    
+    return templates.TemplateResponse("bridge_detail.html", {
+        "request": request,
+        "user": current_user,
+        "bridge": {
+            'id': bridge.id,
+            'name': bridge_name,
+            'street_name': bridge.street_name,
+            'water_name': bridge.water_name,
+            'city': bridge.city,
+            'neighborhood': bridge.neighborhood,
+            'latitude': bridge.latitude,
+            'longitude': bridge.longitude
+        },
+        "stats": stats,
+        "openings": openings,
+        "is_watched": is_watched
+    })
+
+@app.get("/map", response_class=HTMLResponse)
+async def map_view(request: Request, current_user = Depends(get_current_user), db: Session = Depends(get_db)):
+    return templates.TemplateResponse("map.html", {
+        "request": request,
+        "user": current_user
+    })
+
+@app.get("/api/bridges/map", response_class=JSONResponse)
+async def api_bridges_map(
+    bounds: str = Query(None, description="Map bounds as 'south,west,north,east'"),
+    db: Session = Depends(get_db)
+):
+    # Parse bounds if provided
+    if bounds:
+        try:
+            south, west, north, east = map(float, bounds.split(','))
+            query = text("""
+                SELECT id, name, display_name, street_name, city, latitude, longitude,
+                       (SELECT COUNT(*) FROM bridge_opening_links WHERE bridge_id = bridges.id) as opening_count
+                FROM bridges
+                WHERE latitude BETWEEN :south AND :north
+                AND longitude BETWEEN :west AND :east
+                LIMIT 1000
+            """)
+            result = db.execute(query, {
+                "south": south, "north": north,
+                "west": west, "east": east
+            })
+        except:
+            raise HTTPException(status_code=400, detail="Invalid bounds format")
+    else:
+        # Return major cities with aggregated bridge counts for initial view
+        query = text("""
+            SELECT city, 
+                   AVG(latitude) as latitude, 
+                   AVG(longitude) as longitude,
+                   COUNT(*) as count
+            FROM bridges
+            WHERE city IN (
+                SELECT city FROM bridges 
+                WHERE city IS NOT NULL 
+                GROUP BY city 
+                HAVING COUNT(*) > 50
+                ORDER BY COUNT(*) DESC
+                LIMIT 20
+            )
+            GROUP BY city
+        """)
+        result = db.execute(query)
+        
+        cities = []
+        for row in result:
+            cities.append({
+                "type": "city",
+                "name": row.city,
+                "latitude": row.latitude,
+                "longitude": row.longitude,
+                "count": row.count
+            })
+        return {"type": "cities", "data": cities}
+    
+    # Return individual bridges
+    bridges = []
+    for row in result:
+        bridge_name = row.name or row.display_name or (f"{row.street_name} Bridge" if row.street_name else f"Bridge in {row.city}")
+        bridges.append({
+            "id": row.id,
+            "name": bridge_name,
+            "latitude": row.latitude,
+            "longitude": row.longitude,
+            "city": row.city,
+            "has_openings": row.opening_count > 0
+        })
+    
+    return {"type": "bridges", "data": bridges}
 
 @app.get("/faq", response_class=HTMLResponse)
 async def faq(request: Request, current_user = Depends(get_current_user)):

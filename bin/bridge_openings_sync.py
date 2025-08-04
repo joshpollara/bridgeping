@@ -7,7 +7,7 @@ from datetime import datetime
 import os
 import sys
 
-DB_FILE = "bridgeping.db"
+DB_FILE = os.environ.get('DATABASE_PATH', '/app/data/bridgeping.db')
 URL = "https://opendata.ndw.nu/brugopeningen.xml.gz"
 TEMP_FILE = "brugopeningen.xml.gz"
 

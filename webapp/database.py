@@ -60,7 +60,7 @@ def init_db():
             latitude REAL NOT NULL,
             longitude REAL NOT NULL,
             city TEXT,
-            osm_id INTEGER,
+            osm_id TEXT,
             bridge_type TEXT,
             street_name TEXT,
             water_name TEXT,
@@ -109,5 +109,24 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_bridges_city ON bridges(city)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_bridges_name ON bridges(name)')
     
+    # Run migrations for existing tables
+    run_migrations(cursor)
+    
     conn.commit()
     conn.close()
+
+def run_migrations(cursor):
+    """Run database migrations to update existing schemas."""
+    # Migration 1: Add tags column to bridges table if it doesn't exist
+    cursor.execute("PRAGMA table_info(bridges)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if 'tags' not in columns:
+        print("Migration: Adding 'tags' column to bridges table...")
+        cursor.execute("ALTER TABLE bridges ADD COLUMN tags TEXT")
+        print("✅ Tags column added successfully!")
+    
+    # Add future migrations here as needed
+    # Example:
+    # if 'some_column' not in columns:
+    #     cursor.execute("ALTER TABLE some_table ADD COLUMN some_column TEXT")

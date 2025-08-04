@@ -60,7 +60,7 @@ def init_db():
             latitude REAL NOT NULL,
             longitude REAL NOT NULL,
             city TEXT,
-            osm_id TEXT,
+            osm_id TEXT UNIQUE,
             bridge_type TEXT,
             street_name TEXT,
             water_name TEXT,
@@ -125,6 +125,28 @@ def run_migrations(cursor):
         print("Migration: Adding 'tags' column to bridges table...")
         cursor.execute("ALTER TABLE bridges ADD COLUMN tags TEXT")
         print("✅ Tags column added successfully!")
+    
+    # Migration 2: Add UNIQUE constraint to osm_id if it doesn't exist
+    # Check if osm_id has a unique constraint
+    cursor.execute("PRAGMA index_list(bridges)")
+    indexes = cursor.fetchall()
+    has_osm_id_unique = False
+    
+    for idx in indexes:
+        if idx[1].startswith('sqlite_autoindex'):
+            cursor.execute(f"PRAGMA index_info('{idx[1]}')")
+            info = cursor.fetchall()
+            for col in info:
+                cursor.execute("PRAGMA table_info(bridges)")
+                table_info = cursor.fetchall()
+                if col[1] < len(table_info) and table_info[col[1]][1] == 'osm_id':
+                    has_osm_id_unique = True
+                    break
+    
+    if not has_osm_id_unique:
+        print("Migration: Creating unique index on osm_id...")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bridges_osm_id ON bridges(osm_id)")
+        print("✅ Unique constraint added to osm_id!")
     
     # Add future migrations here as needed
     # Example:

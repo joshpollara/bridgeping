@@ -4,8 +4,9 @@ import json
 import sqlite3
 import time
 from datetime import datetime
+import os
 
-DB_FILE = "bridgeping.db"
+DB_FILE = os.environ.get('DATABASE_PATH', '/app/data/bridgeping.db')
 
 def create_bridges_table():
     """Create table for static bridge data from OSM."""

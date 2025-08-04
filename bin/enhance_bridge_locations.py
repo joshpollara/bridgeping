@@ -4,8 +4,9 @@ import requests
 import json
 import time
 from collections import defaultdict
+import os
 
-DB_FILE = "bridgeping.db"
+DB_FILE = os.environ.get('DATABASE_PATH', '/app/data/bridgeping.db')
 
 def add_location_columns():
     """Add columns for enhanced location data."""

@@ -93,7 +93,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Actions</h5>
                     
-                    <a href="/calendar/bridge/{{ bridge.id }}.ics" class="btn btn-primary w-100 mb-3">
+                    <a href="webcal://{{ request.headers.host }}/calendar/bridge/{{ bridge.id }}.ics" class="btn btn-primary w-100 mb-3">
                         <i class="bi bi-calendar-plus"></i> Subscribe to Calendar
                     </a>
                     

@@ -6,6 +6,58 @@
     <title>{% block title %}Bridge Ping{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        /* Global scaling - equivalent to browser zoom at 125% */
+        :root {
+            font-size: 20px; /* Up from default 16px = 125% */
+        }
+        
+        /* Bootstrap overrides for better scaling */
+        .container {
+            max-width: 1400px; /* Wider container for scaled content */
+        }
+        
+        /* Ensure form controls scale nicely */
+        .form-control, .form-select, .btn {
+            font-size: 0.9rem; /* Relative to root = 18px */
+        }
+        
+        /* Navigation adjustments */
+        .navbar {
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+        }
+        
+        /* Card spacing */
+        .card {
+            margin-bottom: 1.5rem;
+        }
+        
+        /* Table adjustments */
+        .table {
+            font-size: 0.9rem;
+        }
+        
+        /* Small text should still be readable */
+        small, .small {
+            font-size: 0.8rem !important;
+        }
+        
+        /* Badge scaling */
+        .badge {
+            font-size: 0.75rem;
+            padding: 0.35em 0.65em;
+        }
+        
+        /* Watchlist name styling */
+        .watchlist-name {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 0.2em 0.5em;
+            border-radius: 0.25rem;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -15,66 +67,35 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                {% if user %}
-                    <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/watchlist">New Watchlist</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/bridges">Bridges</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/map">Map</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/faq">FAQ</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    {% if watchlist %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/dashboard">Dashboard</a>
+                            <span class="nav-link text-white">
+                                <i class="bi bi-list-check"></i>
+                                <span class="watchlist-name">{{ watchlist.name }}</span>
+                            </span>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/watchlist">My Watchlist</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/timeline">Timeline</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/bridges">Bridges</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/map">Map</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/faq">FAQ</a>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <span class="nav-link text-white">{{ user.email }}</span>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/logout">Logout</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="https://github.com/joshpollara/bridgeping" target="_blank" title="View on GitHub">
-                                <i class="bi bi-github"></i>
-                            </a>
-                        </li>
-                    </ul>
-                {% else %}
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="/login">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/register">Register</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/bridges">Bridges</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/map">Map</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/faq">FAQ</a>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="https://github.com/joshpollara/bridgeping" target="_blank" title="View on GitHub">
-                                <i class="bi bi-github"></i>
-                            </a>
-                        </li>
-                    </ul>
-                {% endif %}
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/joshpollara/bridgeping" target="_blank" title="View on GitHub">
+                            <i class="bi bi-github"></i>
+                        </a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
@@ -93,5 +114,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

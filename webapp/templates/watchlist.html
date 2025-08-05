@@ -1,17 +1,50 @@
 {% extends "base.html" %}
 
-{% block title %}Watchlist - Bridge Ping{% endblock %}
+{% block title %}{{ watchlist.name }} - Bridge Ping{% endblock %}
 
-{% block content %}
+{% block extra_head %}
 <style>
     #map { height: 400px; margin-bottom: 20px; border-radius: 8px; }
     .bridge-marker { cursor: pointer; }
+    .watchlist-url {
+        background-color: #f8f9fa;
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        font-family: monospace;
+        word-break: break-all;
+    }
+    .share-buttons .btn {
+        margin-right: 0.5rem;
+    }
 </style>
+{% endblock %}
+
+{% block content %}
 <div class="row">
     <div class="col-md-12">
+        <!-- Watchlist Info Card -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Your Watchlist URL</h5>
+                <p class="text-muted">Save this URL to access your watchlist later. Anyone with this URL can view and edit this watchlist.</p>
+                <div class="watchlist-url mb-3" id="watchlist-url">{{ request.url }}</div>
+                <div class="share-buttons">
+                    <button class="btn btn-primary" onclick="copyToClipboard(event)">
+                        <i class="bi bi-clipboard"></i> Copy URL
+                    </button>
+                    <a href="/timeline/{{ watchlist.name }}" class="btn btn-info">
+                        <i class="bi bi-calendar-week"></i> View Timeline
+                    </a>
+                    <a href="webcal://{{ request.headers.host }}/calendar/watchlist/{{ watchlist.name }}.ics" class="btn btn-success">
+                        <i class="bi bi-calendar-plus"></i> Subscribe to Calendar
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">My Bridge Watchlist</h4>
+                <h4 class="mb-0">Watchlist: <span class="watchlist-name">{{ watchlist.name }}</span></h4>
                 <span class="badge bg-light text-dark">{{ bridges|length }} bridges</span>
             </div>
             <div class="card-body">
@@ -39,7 +72,7 @@
                 <!-- Add Bridge Form -->
                 <div class="mb-4">
                     <h5>Add a Bridge</h5>
-                    <form method="POST" action="/watchlist/add" class="row g-3">
+                    <form method="POST" action="/watchlist/{{ watchlist.name }}/add" class="row g-3">
                         <div class="col-auto flex-grow-1">
                             <input type="text" class="form-control" id="bridge-search" name="bridge_name" 
                                    placeholder="Search and add a bridge by name" required maxlength="100"
@@ -69,11 +102,8 @@
                             {% for bridge in bridges %}
                             <tr>
                                 <td>
-                                    {% if bridge.bridge_id and bridge.bridge_id in bridge_map_data %}
-                                    <a href="#" class="text-decoration-none bridge-link" 
-                                       data-lat="{{ bridge_map_data[bridge.bridge_id].lat }}" 
-                                       data-lon="{{ bridge_map_data[bridge.bridge_id].lon }}"
-                                       data-name="{{ bridge.bridge_name }}">
+                                    {% if bridge.bridge_id %}
+                                    <a href="/bridge/{{ bridge.bridge_id }}" class="text-decoration-none">
                                         {{ bridge.bridge_name }}
                                     </a>
                                     {% else %}
@@ -82,7 +112,7 @@
                                 </td>
                                 <td>{{ bridge.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                 <td>
-                                    <form method="POST" action="/watchlist/remove/{{ bridge.id }}" 
+                                    <form method="POST" action="/watchlist/{{ watchlist.name }}/remove/{{ bridge.id }}" 
                                           class="d-inline" 
                                           onsubmit="return confirm('Remove {{ bridge.bridge_name }} from watchlist?');">
                                         <button type="submit" class="btn btn-sm btn-danger">Remove</button>
@@ -102,644 +132,288 @@
                 <!-- Map Section -->
                 <div class="mt-4">
                     <h5>Bridge Locations</h5>
-                    <div id="map-loading" class="text-center p-5">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading map...</span>
-                        </div>
-                        <p class="mt-2">Loading bridge data...</p>
-                    </div>
-                    <div id="map" style="display: none;"></div>
+                    <div id="map"></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Leaflet CSS and JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 
 <script>
-// Hide loading, show map
-document.getElementById('map-loading').style.display = 'none';
-document.getElementById('map').style.display = 'block';
-
 // Initialize map
-var map = L.map('map').setView([52.3676, 4.9041], 11); // Amsterdam center
+var map = L.map('map').setView([52.3702, 4.8952], 11); // Amsterdam coordinates
 
-// Add OpenStreetMap tiles
+// Add OpenStreetMap tile layer
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// Bridge data for the map is available as mapData (defined below)
-
-// Store all bridge suggestions with their data
-var allBridges = [
-    {% for suggestion in bridge_suggestions %}
-    {
-        name: {{ suggestion | tojson }},
-        id: {{ bridge_id_map.get(suggestion, 'null') | tojson }},
-        hasOpenings: {{ (suggestion.endswith('⏰')) | tojson }}
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-];
-
-// Get coordinates for all bridges (not just watched ones)
-var bridgeCoords = {{ all_bridge_coords | tojson }};
-
-// Custom icon for bridges - MUCH BIGGER AND MORE VISIBLE
-var bridgeIcon = L.divIcon({
-    className: 'bridge-marker-watched',
-    html: '<div style="background-color: #007bff; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5); position: relative;">' +
-          '<div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 12px solid #007bff;"></div>' +
-          '</div>',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32]
-});
-
-var openingBridgeIcon = L.divIcon({
-    className: 'bridge-marker-watched-opening',
-    html: '<div style="background-color: #28a745; width: 36px; height: 36px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-size: 20px; position: relative;">' +
-          '⏰' +
-          '<div style="position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 12px solid #28a745;"></div>' +
-          '<div class="pulse-ring" style="position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; border: 2px solid #28a745; border-radius: 50%; animation: pulse-ring 2s infinite;"></div>' +
-          '</div>',
-    iconSize: [36, 36],
-    iconAnchor: [18, 36]
-});
-
-// Create layer groups for different bridge types
-var watchedBridgesLayer = L.layerGroup().addTo(map);
-var availableBridgesLayer = L.layerGroup().addTo(map);
-
-// Track watched bridge IDs
-var watchedBridgeIds = [
-    {% for bridge in bridges %}
-    {% if bridge.bridge_id %}{{ bridge.bridge_id }}{% if not loop.last %},{% endif %}{% endif %}
-    {% endfor %}
-];
+// Bridge location data from server
+var bridgeMapData = {{ bridge_map_data | tojson }};
+var allBridgeCoords = {{ all_bridge_coords | tojson }};
 
 // Add markers for watched bridges
-{% for bridge in bridges %}
-    {% if bridge.bridge_id and bridge.bridge_id in bridge_map_data %}
-    L.marker([{{ bridge_map_data[bridge.bridge_id].lat }}, {{ bridge_map_data[bridge.bridge_id].lon }}], 
-             {icon: {{ 'openingBridgeIcon' if bridge_map_data[bridge.bridge_id].has_openings else 'bridgeIcon' }}})
-        .addTo(watchedBridgesLayer)
-        .bindPopup("<b>{{ bridge.bridge_name }}</b><br>Added: {{ bridge.created_at.strftime('%Y-%m-%d') }}<br><em>Already in watchlist</em>");
-    {% endif %}
-{% endfor %}
-
-// Add markers for all available bridges
-allBridges.forEach(function(bridge) {
-    if (bridge.id && bridgeCoords[bridge.id] && !watchedBridgeIds.includes(bridge.id)) {
-        var coords = bridgeCoords[bridge.id];
-        var icon = bridge.hasOpenings ? 
-            L.divIcon({
-                className: 'available-bridge-marker-opening',
-                html: '<div style="background-color: #ffc107; width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; position: relative;">' +
-                      '⏰' +
-                      '<div style="position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 8px solid #ffc107;"></div>' +
-                      '</div>',
-                iconSize: [24, 24],
-                iconAnchor: [12, 24]
-            }) : 
-            L.divIcon({
-                className: 'available-bridge-marker',
-                html: '<div style="background-color: #6c757d; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); position: relative;">' +
-                      '<div style="position: absolute; top: -5px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid #6c757d;"></div>' +
-                      '</div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 20]
-            });
-        
-        var marker = L.marker([coords.lat, coords.lon], {icon: icon})
-            .addTo(availableBridgesLayer);
-        
-        // Create popup with add button
-        var popupContent = document.createElement('div');
-        popupContent.style.minWidth = '200px';
-        popupContent.innerHTML = '<b>' + bridge.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</b><br>' +
-            (bridge.hasOpenings ? '<span style="color: green;">⏰ Has scheduled openings</span><br>' : '') +
-            '<button class="btn btn-sm btn-primary add-bridge-btn" style="width: 100%; margin-top: 10px;" ' +
-            'data-bridge-name="' + bridge.name.replace(/"/g, '&quot;') + '" ' +
-            'data-bridge-id="' + bridge.id + '">Add to Watchlist</button>';
-        
-        marker.bindPopup(popupContent);
-        
-        // Handle click on the add button
-        marker.on('popupopen', function() {
-            var btn = document.querySelector('.add-bridge-btn[data-bridge-id="' + bridge.id + '"]');
-            if (btn) {
-                btn.addEventListener('click', function() {
-                    // Create and submit form
-                    var form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/watchlist/add';
-                    
-                    var nameInput = document.createElement('input');
-                    nameInput.type = 'hidden';
-                    nameInput.name = 'bridge_name';
-                    nameInput.value = btn.dataset.bridgeName;
-                    form.appendChild(nameInput);
-                    
-                    var idInput = document.createElement('input');
-                    idInput.type = 'hidden';
-                    idInput.name = 'bridge_id';
-                    idInput.value = btn.dataset.bridgeId;
-                    form.appendChild(idInput);
-                    
-                    document.body.appendChild(form);
-                    form.submit();
-                });
-            }
-        });
-    }
+var watchedMarkers = [];
+Object.entries(bridgeMapData).forEach(function([bridgeId, data]) {
+    var marker = L.marker([data.lat, data.lon])
+        .bindPopup('<b>' + data.name + '</b>')
+        .addTo(map);
+    watchedMarkers.push(marker);
 });
 
-// Add layer control
-var overlays = {
-    "My Watched Bridges": watchedBridgesLayer,
-    "Available Bridges": availableBridgesLayer
-};
-L.control.layers(null, overlays, {collapsed: false}).addTo(map);
-
-// Add a legend
-var legend = L.control({position: 'bottomright'});
-legend.onAdd = function(map) {
-    var div = L.DomUtil.create('div', 'info legend');
-    div.style.backgroundColor = 'white';
-    div.style.padding = '10px';
-    div.style.borderRadius = '5px';
-    div.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
-    
-    div.innerHTML = '<h6 style="margin: 0 0 8px 0; font-weight: bold;">Bridge Types</h6>' +
-        '<div style="margin-bottom: 4px;"><span style="display: inline-block; width: 24px; height: 24px; background: #28a745; border-radius: 50%; vertical-align: middle; margin-right: 8px; text-align: center; color: white; font-size: 12px; line-height: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">⏰</span> <strong>Watched</strong> (with openings)</div>' +
-        '<div style="margin-bottom: 4px;"><span style="display: inline-block; width: 24px; height: 24px; background: #007bff; border-radius: 50%; vertical-align: middle; margin-right: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></span> <strong>Watched</strong> (no openings)</div>' +
-        '<div style="margin-bottom: 4px;"><span style="display: inline-block; width: 18px; height: 18px; background: #ffc107; border-radius: 50%; vertical-align: middle; margin-right: 11px; text-align: center; font-size: 10px; line-height: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">⏰</span> Available (with openings)</div>' +
-        '<div><span style="display: inline-block; width: 16px; height: 16px; background: #6c757d; border-radius: 50%; vertical-align: middle; margin-right: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></span> Available (no openings)</div>';
-    
-    return div;
-};
-legend.addTo(map);
-
-// Auto-zoom to fit all markers
-var mapData = {{ bridge_map_data | tojson }};
-if (Object.keys(mapData).length > 0) {
-    var bounds = L.latLngBounds(Object.values(mapData).map(b => [b.lat, b.lon]));
-    map.fitBounds(bounds, {padding: [50, 50]});
-} else {
-    // If no watched bridges, show all bridges in view
-    if (allBridges.length > 0) {
-        var allCoords = [];
-        allBridges.forEach(function(bridge) {
-            if (bridge.id && bridgeCoords[bridge.id]) {
-                allCoords.push([bridgeCoords[bridge.id].lat, bridgeCoords[bridge.id].lon]);
-            }
-        });
-        if (allCoords.length > 0) {
-            var bounds = L.latLngBounds(allCoords.slice(0, 100)); // Limit initial view to first 100
-            map.fitBounds(bounds, {padding: [50, 50]});
-        }
-    }
+// Fit map to show all watched bridges if any exist
+if (watchedMarkers.length > 0) {
+    var group = new L.featureGroup(watchedMarkers);
+    map.fitBounds(group.getBounds().pad(0.1));
 }
 
-// Initialize search functionality
-var searchInput = document.getElementById('bridge-search');
+// Keep track of search markers
+var searchMarkers = L.layerGroup().addTo(map);
+
+// Bridge autocomplete functionality
+var bridgeSearch = document.getElementById('bridge-search');
 var searchResults = document.getElementById('search-results');
-var selectedIndex = -1;
-var highlightMarker = null;
+var bridgeSuggestions = {{ bridge_suggestions | tojson }};
+var bridgeIdMap = {{ bridge_id_map | tojson }};
 
-// Filter and display results
-function filterBridges(query) {
-    if (!query) {
-        searchResults.style.display = 'none';
-        return;
+// Hidden input for bridge_id
+var hiddenBridgeId = document.createElement('input');
+hiddenBridgeId.type = 'hidden';
+hiddenBridgeId.name = 'bridge_id';
+bridgeSearch.parentNode.appendChild(hiddenBridgeId);
+
+// Show all suggestions when focused
+bridgeSearch.addEventListener('focus', function() {
+    if (this.value.trim() === '') {
+        showAllSuggestions();
     }
-    
-    var filtered = allBridges.filter(function(bridge) {
-        return bridge.name.toLowerCase().includes(query.toLowerCase());
-    }).slice(0, 50); // Limit to 50 results
-    
-    if (filtered.length === 0) {
-        searchResults.style.display = 'none';
-        return;
-    }
-    
-    // Build results HTML
-    searchResults.innerHTML = filtered.map(function(bridge, index) {
-        return '<a href="#" class="list-group-item list-group-item-action" data-index="' + index + '" data-bridge-id="' + bridge.id + '">' +
-               '<div class="d-flex justify-content-between align-items-center">' +
-               '<span>' + bridge.name.replace(new RegExp('(' + query + ')', 'gi'), '<strong>$1</strong>') + '</span>' +
-               '</div></a>';
-    }).join('');
-    
+});
+
+function showAllSuggestions() {
+    searchResults.innerHTML = '';
     searchResults.style.display = 'block';
-    selectedIndex = -1;
-}
-
-// Handle search input
-searchInput.addEventListener('input', function(e) {
-    filterBridges(e.target.value);
-});
-
-// Handle click on search result
-searchResults.addEventListener('click', function(e) {
-    e.preventDefault();
-    var item = e.target.closest('.list-group-item');
-    if (item) {
-        selectBridge(item);
-    }
-});
-
-// Handle keyboard navigation
-searchInput.addEventListener('keydown', function(e) {
-    var items = searchResults.querySelectorAll('.list-group-item');
     
-    if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-        updateSelection(items);
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, -1);
-        updateSelection(items);
-    } else if (e.key === 'Enter') {
-        if (selectedIndex >= 0 && items[selectedIndex]) {
+    // Show first 20 suggestions
+    bridgeSuggestions.slice(0, 20).forEach(function(suggestion) {
+        var item = document.createElement('a');
+        item.href = '#';
+        item.className = 'list-group-item list-group-item-action';
+        item.innerHTML = suggestion;
+        
+        item.addEventListener('click', function(e) {
             e.preventDefault();
-            selectBridge(items[selectedIndex]);
-        }
-    } else if (e.key === 'Escape') {
-        searchResults.style.display = 'none';
-        selectedIndex = -1;
-    }
-});
-
-// Update visual selection
-function updateSelection(items) {
-    items.forEach(function(item, index) {
-        if (index === selectedIndex) {
-            item.classList.add('active');
-        } else {
-            item.classList.remove('active');
-        }
+            selectBridge(suggestion);
+        });
+        
+        searchResults.appendChild(item);
     });
 }
 
-// Select a bridge and show on map
-function selectBridge(item) {
-    var bridgeId = item.dataset.bridgeId;
-    var bridgeName = item.textContent.trim();
-    
-    // Set input value
-    searchInput.value = bridgeName;
+function selectBridge(suggestion) {
+    bridgeSearch.value = suggestion;
+    hiddenBridgeId.value = bridgeIdMap[suggestion] || '';
     searchResults.style.display = 'none';
     
-    // Highlight on map if coordinates available
-    if (bridgeId && bridgeCoords[bridgeId]) {
-        var coords = bridgeCoords[bridgeId];
-        
-        // Remove previous highlight
-        if (highlightMarker) {
-            map.removeLayer(highlightMarker);
-        }
-        
-        // Add highlight marker
-        var highlightIcon = L.divIcon({
-            className: 'bridge-marker',
-            html: '<div style="background-color: #ff6b6b; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); animation: pulse 2s infinite;"></div>',
-            iconSize: [30, 30]
-        });
-        
-        highlightMarker = L.marker([coords.lat, coords.lon], {icon: highlightIcon})
-            .addTo(map)
-            .bindPopup("<b>" + bridgeName + "</b><br>Click 'Add Bridge' to add to watchlist")
-            .openPopup();
-        
-        // Pan to location
+    // Show location on map if we have coordinates
+    var bridgeId = bridgeIdMap[suggestion];
+    if (bridgeId && allBridgeCoords[bridgeId]) {
+        var coords = allBridgeCoords[bridgeId];
         map.setView([coords.lat, coords.lon], 15);
+        
+        // Highlight the bridge on the map
+        searchMarkers.clearLayers();
+        L.marker([coords.lat, coords.lon])
+            .bindPopup('<b>' + suggestion + '</b>')
+            .addTo(searchMarkers)
+            .openPopup();
     }
 }
 
-// Hide results when clicking outside
-document.addEventListener('click', function(e) {
-    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-        searchResults.style.display = 'none';
+// Filter suggestions on input
+bridgeSearch.addEventListener('input', function() {
+    var searchTerm = this.value.toLowerCase();
+    searchResults.innerHTML = '';
+    
+    if (searchTerm.length === 0) {
+        showAllSuggestions();
+        return;
     }
-});
-
-// Handle clicks on bridge links in the table
-document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('bridge-link')) {
-        e.preventDefault();
-        var lat = parseFloat(e.target.dataset.lat);
-        var lon = parseFloat(e.target.dataset.lon);
-        var name = e.target.dataset.name;
+    
+    var filtered = bridgeSuggestions.filter(function(suggestion) {
+        return suggestion.toLowerCase().includes(searchTerm);
+    });
+    
+    if (filtered.length === 0) {
+        searchResults.style.display = 'none';
+        hiddenBridgeId.value = '';
+        return;
+    }
+    
+    searchResults.style.display = 'block';
+    
+    filtered.slice(0, 20).forEach(function(suggestion) {
+        var item = document.createElement('a');
+        item.href = '#';
+        item.className = 'list-group-item list-group-item-action';
         
-        // Remove previous highlight if any
-        if (highlightMarker) {
-            map.removeLayer(highlightMarker);
-        }
+        // Highlight matching text
+        var regex = new RegExp('(' + searchTerm + ')', 'gi');
+        item.innerHTML = suggestion.replace(regex, '<strong>$1</strong>');
         
-        // Find existing marker for this bridge
-        var existingMarker = null;
-        map.eachLayer(function(layer) {
-            if (layer instanceof L.Marker && 
-                layer.getLatLng().lat === lat && 
-                layer.getLatLng().lng === lon) {
-                existingMarker = layer;
-            }
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            selectBridge(suggestion);
         });
         
-        // Pan to location and open popup if marker exists
-        map.setView([lat, lon], 15);
-        if (existingMarker) {
-            existingMarker.openPopup();
-        } else {
-            // Create temporary highlight if no marker exists
-            var highlightIcon = L.divIcon({
-                className: 'bridge-marker',
-                html: '<div style="background-color: #ff6b6b; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); animation: pulse 2s infinite;"></div>',
-                iconSize: [30, 30]
-            });
-            
-            highlightMarker = L.marker([lat, lon], {icon: highlightIcon})
-                .addTo(map)
-                .bindPopup("<b>" + name + "</b>")
-                .openPopup();
-        }
+        searchResults.appendChild(item);
+    });
+});
+
+// Hide results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!bridgeSearch.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
     }
 });
 
 // Location search functionality
-var locationInput = document.getElementById('location-search');
-var locationSearchBtn = document.getElementById('location-search-btn');
+var locationSearch = document.getElementById('location-search');
 var locationResults = document.getElementById('location-results');
-var locationMarker = null;
-var locationSearchTimeout = null;
+var locationSearchBtn = document.getElementById('location-search-btn');
 
-// Handle location search with better query building
-function searchLocation(query) {
-    if (!query || query.length < 3) return;
-    
-    // Build search query - try multiple strategies
-    var searchQueries = [];
-    
-    // First try as-is with Amsterdam (most searches will be there)
-    searchQueries.push(query + ', Amsterdam, Netherlands');
-    
-    // Then try with just Netherlands
-    if (!query.toLowerCase().includes('nederland') && !query.toLowerCase().includes('netherlands')) {
-        searchQueries.push(query + ', Netherlands');
-    }
-    
-    // Also try the raw query
-    searchQueries.push(query);
-    
-    // Try first query
-    performGeocode(searchQueries, 0);
-}
-
-function performGeocode(queries, index) {
-    if (index >= queries.length) {
-        locationResults.innerHTML = '<div class="list-group-item text-muted">No locations found. Try adding city name.</div>';
-        locationResults.style.display = 'block';
-        return;
-    }
-    
-    var query = queries[index];
-    
-    // Use Nominatim API with viewbox for Netherlands
-    var bbox = '&viewbox=3.31497,50.75038,7.09205,53.51040&bounded=1'; // Netherlands bounding box
-    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(query) + bbox)
-        .then(response => response.json())
-        .then(data => {
-            if (data.length === 0 && index < queries.length - 1) {
-                // Try next query
-                performGeocode(queries, index + 1);
-                return;
-            }
-            
-            if (data.length === 0) {
-                locationResults.innerHTML = '<div class="list-group-item text-muted">No locations found. Try adding city name.</div>';
-                locationResults.style.display = 'block';
-                return;
-            }
-            
-            // Display results
-            locationResults.innerHTML = data.map(function(item, index) {
-                // Simplify display name for Dutch addresses
-                var displayName = item.display_name;
-                var parts = displayName.split(', ');
-                var shortName = parts.slice(0, 3).join(', '); // Show first 3 parts
-                
-                return '<a href="#" class="list-group-item list-group-item-action" data-lat="' + item.lat + 
-                       '" data-lon="' + item.lon + '" data-display-name="' + displayName.replace(/"/g, '&quot;') + '">' +
-                       '<small><strong>' + shortName + '</strong><br>' +
-                       '<span class="text-muted">' + parts.slice(3).join(', ') + '</span></small></a>';
-            }).join('');
-            locationResults.style.display = 'block';
-        })
-        .catch(error => {
-            console.error('Location search error:', error);
-            locationResults.innerHTML = '<div class="list-group-item text-danger">Search error. Please try again.</div>';
-            locationResults.style.display = 'block';
-        });
-}
-
-// Autocomplete on input
-locationInput.addEventListener('input', function(e) {
-    var query = e.target.value.trim();
-    
-    // Clear previous timeout
-    if (locationSearchTimeout) {
-        clearTimeout(locationSearchTimeout);
-    }
-    
-    if (query.length < 3) {
-        locationResults.style.display = 'none';
-        return;
-    }
-    
-    // Debounce - wait 300ms after user stops typing
-    locationSearchTimeout = setTimeout(function() {
-        searchLocation(query);
-    }, 300);
-});
-
-// Handle search button click
+locationSearch.addEventListener('input', debounce(searchLocation, 300));
 locationSearchBtn.addEventListener('click', function() {
-    var query = locationInput.value.trim();
-    if (query) {
-        searchLocation(query);
-    }
+    searchLocation();
 });
 
-// Handle enter key in location search
-locationInput.addEventListener('keypress', function(e) {
+locationSearch.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
-        var query = locationInput.value.trim();
-        if (query) {
-            searchLocation(query);
-        }
+        searchLocation();
     }
 });
 
-// Handle clicking on location result
-locationResults.addEventListener('click', function(e) {
-    e.preventDefault();
-    var item = e.target.closest('.list-group-item');
-    if (item && item.dataset.lat) {
-        var lat = parseFloat(item.dataset.lat);
-        var lon = parseFloat(item.dataset.lon);
-        var displayName = item.dataset.displayName;
-        
-        // Hide results
-        locationResults.style.display = 'none';
-        locationInput.value = displayName.split(',')[0]; // Show first part of address
-        
-        // Remove previous location marker
-        if (locationMarker) {
-            map.removeLayer(locationMarker);
-        }
-        
-        // Add location marker with distinct style
-        var locationIcon = L.divIcon({
-            className: 'location-marker',
-            html: '<div style="background-color: #ff0000; width: 30px; height: 30px; border-radius: 0; transform: rotate(45deg); border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 30]
-        });
-        
-        locationMarker = L.marker([lat, lon], {icon: locationIcon})
-            .addTo(map)
-            .bindPopup("<b>Search Location</b><br><small>" + displayName + "</small>");
-        
-        // Center map on location and zoom to show nearby bridges
-        map.setView([lat, lon], 14);
-        
-        // Find and highlight nearby bridges
-        var nearbyBridges = [];
-        var searchRadius = 0.02; // Approximately 2km
-        
-        allBridges.forEach(function(bridge) {
-            if (bridge.id && bridgeCoords[bridge.id]) {
-                var bCoords = bridgeCoords[bridge.id];
-                var distance = Math.sqrt(Math.pow(bCoords.lat - lat, 2) + Math.pow(bCoords.lon - lon, 2));
-                if (distance <= searchRadius) {
-                    nearbyBridges.push({
-                        bridge: bridge,
-                        distance: distance,
-                        coords: bCoords
-                    });
-                }
+function searchLocation() {
+    var query = locationSearch.value.trim();
+    if (query.length < 3) return;
+    
+    // Add Netherlands to query for better results
+    var searchQuery = query + ', Netherlands';
+    
+    fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(searchQuery) + '&limit=5&countrycodes=nl')
+        .then(response => response.json())
+        .then(data => {
+            locationResults.innerHTML = '';
+            if (data.length === 0) {
+                locationResults.style.display = 'none';
+                return;
             }
+            
+            locationResults.style.display = 'block';
+            data.forEach(function(result) {
+                var item = document.createElement('a');
+                item.href = '#';
+                item.className = 'list-group-item list-group-item-action';
+                item.innerHTML = result.display_name;
+                
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    selectLocation(result);
+                });
+                
+                locationResults.appendChild(item);
+            });
         });
-        
-        // Sort by distance
-        nearbyBridges.sort(function(a, b) { return a.distance - b.distance; });
-        
-        // Show nearby bridges count
-        if (nearbyBridges.length > 0) {
-            locationMarker.bindPopup(
-                "<b>Search Location</b><br>" +
-                "<small>" + displayName + "</small><br>" +
-                "<strong>" + nearbyBridges.length + " bridges nearby</strong>"
-            ).openPopup();
-        }
-    }
-});
+}
 
-// Hide results when clicking outside
+function selectLocation(location) {
+    locationSearch.value = location.display_name;
+    locationResults.style.display = 'none';
+    
+    // Center map on location
+    var lat = parseFloat(location.lat);
+    var lon = parseFloat(location.lon);
+    map.setView([lat, lon], 14);
+    
+    // Add a temporary marker
+    searchMarkers.clearLayers();
+    L.marker([lat, lon])
+        .bindPopup('<b>Search Location</b><br>' + location.display_name)
+        .addTo(searchMarkers)
+        .openPopup();
+}
+
+// Hide location results when clicking outside
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('#location-search') && !e.target.closest('#location-results')) {
+    if (!locationSearch.contains(e.target) && !locationResults.contains(e.target)) {
         locationResults.style.display = 'none';
     }
 });
 
-// Add pulse animation CSS and styles
-var style = document.createElement('style');
-style.textContent = `
-    @keyframes pulse {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.1); opacity: 0.8; }
-        100% { transform: scale(1); opacity: 1; }
-    }
-    
-    @keyframes pulse-ring {
-        0% { transform: scale(1); opacity: 1; }
-        100% { transform: scale(1.5); opacity: 0; }
-    }
-    
-    /* Make bridge markers stand out more */
-    .bridge-marker-watched,
-    .bridge-marker-watched-opening,
-    .available-bridge-marker,
-    .available-bridge-marker-opening {
-        z-index: 1000 !important;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    
-    .bridge-marker-watched:hover,
-    .bridge-marker-watched-opening:hover,
-    .available-bridge-marker:hover,
-    .available-bridge-marker-opening:hover {
-        transform: scale(1.2);
-        z-index: 1001 !important;
-    }
-    
-    /* Add glow effect for watched bridges */
-    .bridge-marker-watched-opening > div {
-        animation: glow 2s ease-in-out infinite alternate;
-    }
-    
-    @keyframes glow {
-        from { box-shadow: 0 2px 10px rgba(0,0,0,0.6), 0 0 20px rgba(40, 167, 69, 0.5); }
-        to { box-shadow: 0 2px 10px rgba(0,0,0,0.6), 0 0 30px rgba(40, 167, 69, 0.8); }
-    }
-    
-    .bridge-link {
-        color: #007bff;
-        cursor: pointer;
-        transition: color 0.2s;
-    }
-    
-    .bridge-link:hover {
-        color: #0056b3;
-        text-decoration: underline !important;
-    }
-    
-    #search-results {
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        border: 1px solid #ddd;
-        background: white;
-    }
-    
-    #search-results .list-group-item {
-        border-left: none;
-        border-right: none;
-        border-radius: 0;
-    }
-    
-    #search-results .list-group-item:first-child {
-        border-top: none;
-    }
-    
-    #search-results .list-group-item.active {
-        background-color: #007bff;
-        color: white;
-    }
-    
-    #search-results .list-group-item strong {
-        color: #007bff;
-    }
-    
-    #search-results .list-group-item.active strong {
-        color: white;
-    }
-`;
-document.head.appendChild(style);
+// Debounce function to limit API calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Copy to clipboard function
+function copyToClipboard(event) {
+    var urlText = document.getElementById('watchlist-url').textContent;
+    navigator.clipboard.writeText(urlText).then(function() {
+        // Show success message
+        var btn = event.target.closest('button');
+        var originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+        
+        setTimeout(function() {
+            btn.innerHTML = originalText;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-primary');
+        }, 2000);
+    }).catch(function(err) {
+        console.error('Failed to copy: ', err);
+        // Fallback for older browsers
+        var textArea = document.createElement("textarea");
+        textArea.value = urlText;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            // Show success message
+            var btn = event.target.closest('button');
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Copied!';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+            
+            setTimeout(function() {
+                btn.innerHTML = originalText;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+            }, 2000);
+        } catch (err) {
+            alert('Failed to copy URL. Please copy manually: ' + urlText);
+        }
+        document.body.removeChild(textArea);
+    });
+}
 </script>
 {% endblock %}

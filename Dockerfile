@@ -25,6 +25,8 @@ RUN mkdir -p /app/data
 RUN echo "0 */6 * * * cd /app && /usr/local/bin/python /app/bin/bridge_openings_sync.py >> /var/log/cron.log 2>&1" > /etc/cron.d/bridge-sync && \
     echo "0 2 * * 0 cd /app && /usr/local/bin/python /app/bin/fetch_osm_bridges.py >> /var/log/cron.log 2>&1" >> /etc/cron.d/bridge-sync && \
     echo "0 3 * * 0 cd /app && /usr/local/bin/python /app/bin/enhance_bridge_locations.py >> /var/log/cron.log 2>&1" >> /etc/cron.d/bridge-sync && \
+    echo "30 3 * * 0 cd /app && /usr/local/bin/python /app/webapp/run_migration.py >> /var/log/cron.log 2>&1" >> /etc/cron.d/bridge-sync && \
+    echo "30 */6 * * * cd /app && /usr/local/bin/python /app/webapp/run_migration.py >> /var/log/cron.log 2>&1" >> /etc/cron.d/bridge-sync && \
     chmod 0644 /etc/cron.d/bridge-sync && \
     crontab /etc/cron.d/bridge-sync && \
     touch /var/log/cron.log

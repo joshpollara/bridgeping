@@ -16,26 +16,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-class User(Base):
-    __tablename__ = "users"
+# URL-based watchlist models
+class Watchlist(Base):
+    __tablename__ = "watchlists"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    calendar_token = Column(String, unique=True, index=True)
-    
-    watched_bridges = relationship("WatchedBridge", back_populates="user", cascade="all, delete-orphan")
-
-class WatchedBridge(Base):
-    __tablename__ = "watched_bridges"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    bridge_name = Column(String, nullable=False)
-    bridge_id = Column(Integer, nullable=True)  # Reference to bridges table
+    name = Column(String, unique=True, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    user = relationship("User", back_populates="watched_bridges")
+    bridges = relationship("WatchlistBridge", back_populates="watchlist", cascade="all, delete-orphan")
+
+class WatchlistBridge(Base):
+    __tablename__ = "watchlist_bridges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    watchlist_id = Column(Integer, ForeignKey("watchlists.id"), nullable=False)
+    bridge_name = Column(String, nullable=False)
+    bridge_id = Column(String, nullable=True)  # Reference to bridges table
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    watchlist = relationship("Watchlist", back_populates="bridges")
 
 def get_db():
     db = SessionLocal()

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Event Timeline - Bridge Ping{% endblock %}
+{% block title %}Timeline - {{ watchlist.name }} - Bridge Ping{% endblock %}
 
 {% block content %}
 <style>
@@ -50,96 +50,104 @@
         <div class="card">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">Bridge Opening Timeline</h4>
-                <span class="badge bg-light text-dark">Watching {{ watched_count }} bridges</span>
+                <div>
+                    <a href="/watchlist/{{ watchlist.name }}" class="btn btn-sm btn-light">
+                        <i class="bi bi-list-check"></i> Back to Watchlist
+                    </a>
+                    <a href="webcal://{{ request.headers.host }}/calendar/watchlist/{{ watchlist.name }}.ics" class="btn btn-sm btn-success">
+                        <i class="bi bi-calendar-plus"></i> Subscribe to Calendar
+                    </a>
+                </div>
             </div>
             <div class="card-body">
-                {% if watched_count == 0 %}
-                <div class="alert alert-info">
-                    <h5>No bridges in your watchlist</h5>
-                    <p>Add bridges to your watchlist to see their opening events here.</p>
-                    <a href="/watchlist" class="btn btn-primary">Go to Watchlist</a>
-                </div>
-                {% else %}
-                
-                <!-- Current Events -->
-                {% if current_events %}
-                <div class="timeline-section">
-                    <h5 class="text-success mb-3">
-                        <i class="bi bi-circle-fill"></i> Currently Open
-                    </h5>
-                    {% for event in current_events %}
-                    <div class="timeline-event current">
-                        <h6 class="mb-1">{{ event.bridge_name }}</h6>
-                        <div class="event-time">
-                            <strong>Now</strong> - Closes at {{ event.end_time.strftime('%H:%M') }}
-                            {% if event.bridge_city %}({{ event.bridge_city }}){% endif %}
-                        </div>
+                <!-- Filter Controls -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="hours-filter" class="form-label">Time Range</label>
+                        <select class="form-select" id="hours-filter" onchange="updateTimeRange()">
+                            <option value="24" {% if hours == 24 %}selected{% endif %}>Next 24 hours</option>
+                            <option value="48" {% if hours == 48 %}selected{% endif %}>Next 48 hours</option>
+                            <option value="72" {% if hours == 72 %}selected{% endif %}>Next 3 days</option>
+                            <option value="168" {% if hours == 168 %}selected{% endif %}>Next 7 days</option>
+                        </select>
                     </div>
-                    {% endfor %}
+                    <div class="col-md-6">
+                        <label class="form-label">Timezone</label>
+                        <div class="form-control-plaintext">{{ user_tz }}</div>
+                    </div>
                 </div>
-                {% endif %}
-                
-                <!-- Upcoming Events -->
-                <div class="timeline-section">
-                    <h5 class="mb-3">📅 Upcoming Bridge Openings</h5>
-                    {% if upcoming_events %}
-                        {% for event in upcoming_events %}
-                        <div class="timeline-event">
-                            <h6 class="mb-1">{{ event.bridge_name }}</h6>
-                            <div class="event-time">
-                                <strong>{{ event.start_time.strftime('%a, %b %d at %H:%M') }}</strong> - 
-                                {{ event.end_time.strftime('%H:%M') }}
-                                ({{ ((event.end_time - event.start_time).seconds // 60) }} minutes)
-                                {% if event.bridge_city %}• {{ event.bridge_city }}{% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                    <p class="text-muted">No upcoming openings scheduled for your watched bridges.</p>
-                    {% endif %}
-                </div>
-                
-                <!-- Past Events -->
-                <div class="timeline-section">
-                    <h5 class="mb-3 text-muted">📋 Recent Past Openings</h5>
-                    {% if past_events %}
-                        <div class="text-muted">
-                            {% for event in past_events[:20] %}
-                            <div class="timeline-event past">
-                                <h6 class="mb-1">{{ event.bridge_name }}</h6>
-                                <div class="event-time">
-                                    {{ event.start_time.strftime('%a, %b %d at %H:%M') }} - 
-                                    {{ event.end_time.strftime('%H:%M') }}
-                                    {% if event.bridge_city %}• {{ event.bridge_city }}{% endif %}
+
+                {% if openings %}
+                    {% set current_date = None %}
+                    {% set now = openings[0].start_datetime.now(openings[0].start_datetime.tzinfo) %}
+                    
+                    {% for opening in openings %}
+                        {% set opening_date = opening.start_datetime.strftime('%A, %B %d, %Y') %}
+                        
+                        <!-- Add date header if it's a new day -->
+                        {% if opening_date != current_date %}
+                            {% set current_date = opening_date %}
+                            <div class="timeline-section">
+                                <h5 class="text-primary mb-3">{{ opening_date }}</h5>
+                        {% endif %}
+                        
+                        {% set is_past = opening.end_datetime < now %}
+                        {% set is_current = opening.start_datetime <= now and opening.end_datetime >= now %}
+                        
+                        <div class="timeline-event {% if is_past %}past{% elif is_current %}current{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        {{ opening.bridge_name }}
+                                        {% if is_current %}
+                                        <span class="badge bg-success ms-2">OPEN NOW</span>
+                                        {% endif %}
+                                    </h6>
+                                    {% if opening.city or opening.neighborhood %}
+                                    <small class="text-muted">
+                                        {% if opening.neighborhood %}{{ opening.neighborhood }}{% if opening.city %}, {% endif %}{% endif %}
+                                        {% if opening.city %}{{ opening.city }}{% endif %}
+                                    </small>
+                                    {% endif %}
                                 </div>
+                                <span class="badge bg-secondary">{{ opening.duration_minutes }} min</span>
                             </div>
-                            {% endfor %}
-                            {% if past_events|length > 20 %}
-                            <p class="text-center mt-3">
-                                <small>Showing 20 most recent events out of {{ past_events|length }} total</small>
-                            </p>
+                            <div class="event-time mt-2">
+                                <i class="bi bi-clock"></i>
+                                {{ opening.start_datetime.strftime('%H:%M') }} - {{ opening.end_datetime.strftime('%H:%M') }}
+                            </div>
+                            {% if opening.street_name or opening.water_name %}
+                            <small class="text-muted">
+                                {% if opening.street_name %}{{ opening.street_name }}{% endif %}
+                                {% if opening.water_name %}over {{ opening.water_name }}{% endif %}
+                            </small>
                             {% endif %}
                         </div>
-                    {% else %}
-                    <p class="text-muted">No past events recorded yet.</p>
-                    {% endif %}
-                </div>
-                
+                        
+                        <!-- Close section div if this is the last event of the day or the last event overall -->
+                        {% if loop.last or (not loop.last and openings[loop.index].start_datetime.strftime('%A, %B %d, %Y') != opening_date) %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading">No Upcoming Bridge Openings</h5>
+                        <p class="mb-0">There are no scheduled bridge openings for your watched bridges in the next {{ hours }} hours.</p>
+                        <hr>
+                        <p class="mb-0">
+                            <a href="/watchlist/{{ watchlist.name }}" class="alert-link">Add more bridges to your watchlist</a> to see their opening times here.
+                        </p>
+                    </div>
                 {% endif %}
-            </div>
-        </div>
-        
-        <!-- Info Card -->
-        <div class="card mt-3">
-            <div class="card-body">
-                <h5>About Bridge Opening Times</h5>
-                <p>This timeline shows scheduled bridge openings for the bridges in your watchlist. 
-                   Times are based on the official schedule from the NDW (Nationale Databank Wegverkeersgegevens).</p>
-                <p class="mb-0"><small class="text-muted">
-                    Note: Only bridges marked with ⏰ in your watchlist have scheduled opening data available.
-                </small></p>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function updateTimeRange() {
+    const hours = document.getElementById('hours-filter').value;
+    window.location.href = `/timeline/{{ watchlist.name }}?hours=${hours}`;
+}
+</script>
 {% endblock %}

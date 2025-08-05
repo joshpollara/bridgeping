@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import hashlib
 
-def generate_ical_feed(user_email: str, events: List[Dict]) -> str:
+def generate_ical_feed(events: List[Dict], calendar_name: str = "BridgePing") -> str:
     """Generate iCalendar feed for bridge opening events."""
     
     # iCal header
@@ -12,8 +12,8 @@ def generate_ical_feed(user_email: str, events: List[Dict]) -> str:
         "PRODID:-//BridgePing//Bridge Opening Calendar//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
-        f"X-WR-CALNAME:Bridge Openings - {user_email}",
-        "X-WR-CALDESC:Scheduled bridge openings for your watched bridges",
+        f"X-WR-CALNAME:{calendar_name}",
+        "X-WR-CALDESC:Scheduled bridge openings",
         "X-WR-TIMEZONE:Europe/Amsterdam",
         "REFRESH-INTERVAL;VALUE=DURATION:PT1H",  # Refresh every hour
     ]
@@ -42,7 +42,8 @@ def generate_ical_feed(user_email: str, events: List[Dict]) -> str:
     # Add events
     for event in events:
         # Generate unique ID for this event
-        uid_string = f"{event['bridge_name']}-{event['start_time']}-{event['location_key']}"
+        location_key = event.get('location_key', '')
+        uid_string = f"{event['bridge_name']}-{event['start_time']}-{location_key}"
         uid = hashlib.md5(uid_string.encode()).hexdigest()
         
         # Format times for iCal
